@@ -14,15 +14,183 @@
 
 <script type="text/javascript">
 
-var game = new Phaser.Game(800, 600, Phaser.AUTO, '', { preload: preload, create: create, update: update });
+const WIDTH     = 800
+const HEIGHT    = 600
+
+// Constants that dictate player's physical properties
+const BOUNCE     = 0.2
+const GRAVITY    = 300
+
+// I'm not sure if this is supposed to be a global variable. I think it is.
+// The tutorial does not make it clear at all.
+var score = 0
+var scoreText
+
+var game = new Phaser.Game(WIDTH, HEIGHT, Phaser.AUTO, '', { preload: preload, create: create, update: update })
 
 function preload() {
+    game.load.image('sky',    'assets/sky.png')
+    game.load.image('ground', 'assets/platform.png')
+    game.load.image('star',   'assets/star.png')
+    game.load.spritesheet('dude', 'assets/dude.png', 32, 48)
 }
 
 function create() {
+    // It's not clear from the tutorial if this should come out.
+    // game.add.sprite(0, 0, 'star')
+    
+    // BEGIN BLINDLY COPYING THE TUTORIAL
+    
+    // We're going to be using physics, so enable the arcade physics system.
+    // There are three available physics systems.
+    // They are Arcade, Ninja, and P2
+    // Arcade is for low powered devices
+    // Ninja is an advanced tile based engine
+    // P2 is... super fancy by the sounds of it.
+    game.physics.startSystem(Phaser.Physics.ARCADE)
+    
+    // Add a simple background for our game.
+    // Backgrounds are handled as sprites.
+    // Hey! I bet this means I can do animated backgrounds! Holy crap!
+    game.add.sprite(0, 0, 'sky')
+    
+    // The platforms group contains the ground and two ledges we can jump on.
+    // A group is essentially just a class.
+    // The special thing about a group is that when you perform an action on a
+    //    group, ever member of that group will receive that operation
+    platforms = game.add.group()
+    
+    // Enable physics for any object in the platforms group.
+    platforms.enableBody = true
+    
+    // Here we create the ground.
+    // I'm not really clear on what that 64 means.
+    var ground = platforms.create(0, game.world.height - 64, 'ground')
+    
+    // Scale to fit the width of the game,the original sprite is 400x32 in size
+    // I'm not clear on where two comes from.
+    ground.scale.setTo(2,2)
+    
+    // This stops it from falling away when you jump.
+    ground.body.immovable = true
+    
+    // Now let's create two ledges.
+    // You have to do this by using a variable to create each one, and then
+    //    setting that variable.
+    // The numbers denote the position.
+    var ledge = platforms.create(400, 400, 'ground')
+    ledge.body.immovable = true
+    ledge = platforms.create(-150, 250, 'ground')
+    ledge.body.immovable = true
+    
+    // END BLINDLY COPYING THE TUTORIAL
+    // I actually ended up looking into things. Learning is good.
+    
+    // Next comes adding the player.
+    // BEGIN BLINDLY COPYING THE TUTORIAL AND ALSO GOOGLING THINGS, APPARENTLY
+    
+    // The player and its settings
+    // I'm still not clear on where the numbers for positions come from.
+    player = game.add.sprite(32, game.world.height - 150, 'dude')
+    
+    // We need to enable physics for the player
+    game.physics.arcade.enable(player)
+    
+    // Player physics properties. Give the little guy a slight bounce
+    player.body.bounce.y                = BOUNCE
+    player.body.gravity.y               = GRAVITY
+    player.body.collideWorldBoundes     = true
+    
+    // Our two animations, walking left and right.
+    player.animations.add('left',    [0, 1, 2, 3], 10, true)
+    player.animations.add('right',   [5, 6, 7, 8], 10, true)
+    
+    // END BLINDLY COPYING THE TUTORIAL AND ALSO GOOGLING THINGS, APPARENTLY
+    
+    // It wasn't clear in the tutorial where this line goes.
+    // Looking at other people's game examples though, this looks like the thing
+    cursors = game.input.keyboard.createCursorKeys()
+    
+    // Add the stars
+    stars = game.add.group()
+    stars.enableBody = true
+    
+    // Here we'll create 12 of them evenly space apart
+    for(var i = 0; i < 12; i++)
+    {
+        // Create a star inside of the stars group
+        // I'm not sure where 70 comes from.
+        var star = stars.create(i * 70, 0, 'star')
+        
+        // Let gravity do it's thing
+        // Six seems to be a number, pulled from an ass
+        star.body.gravity.y = 6
+        
+        // Give each star a random amount of bounciness
+        // Math.random must not give a number between -int_max and int_max
+        star.body.bounce.y = 0.7 + Math.random() * 0.2
+    }
+    
+    // Set up scoreText
+    // the two numbers are the location
+    scoreText = game.add.text(16, 16, 'Score: 0', {fontsize: '32px', fill: "#000"})
 }
 
 function update() {
+    // Make sure the player collides with the platforms
+    // Collide the player and the stars with the platforms
+    game.physics.arcade.collide(player, platforms)
+    
+    // Also makes sure the stars make collisions with the ground.
+    game.physics.arcade.collide(stars, platforms)
+    
+    // Check to see if the player touches a star
+    // Collect star is the function to be called when the overlap happens
+    // I have no idea what the null and the this are for
+    game.physics.arcade.overlap(player, stars, collectStar, null, this)
+    
+    // Reset the player's velocity
+    player.body.velocity.x = 0
+    
+    // Poll cursor keys to see if they are being pressed
+    // Take action on the results of that polling
+    if (cursors.left.isDown)
+    {
+        // Move to the left
+        // Negative one fifty seems to be an arbitrary number
+        player.body.velocity.x = -150
+        player.animations.play('left')
+    }
+    else if (cursors.right.isDown)
+    {
+        // Move to the right
+        player.body.velocity.x = 150
+        player.animations.play('right')
+    }
+    else
+    {
+        // Stand still
+        player.animations.stop()
+        
+        // 4 is the idle animation for the player.
+        player.frame = 4
+    }
+    
+    // Allow the player to jump if they are touching the ground
+    if(cursors.up.isDown && player.body.touching.down)
+        player.body.velocity.y = -350
+}
+
+// Our overlap star check needs a star collection function
+function collectStar(player, star)
+{
+	// remove the star from display
+	star.kill()
+	
+	// We need to do something with our score variable
+	// Add and update the score
+	score 			+= 	1
+	scoreText.text 	= 	'Score: ' + score
 }
 
 </script>
